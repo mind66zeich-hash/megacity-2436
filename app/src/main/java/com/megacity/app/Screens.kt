@@ -116,6 +116,9 @@ fun GameScreen(vm: GameViewModel, modifier: Modifier = Modifier) {
                 color = Color(0xFFFFD54F),
                 modifier = Modifier.padding(start = 10.dp)
             )
+            if (vm.speaker.speaking) {
+                TextButton(onClick = { vm.stopSpeaking() }) { Text("⏹ Stop") }
+            }
         }
 
         EnergyBar(vm)
@@ -221,6 +224,7 @@ fun GameScreen(vm: GameViewModel, modifier: Modifier = Modifier) {
                             if (target.isNarrator) "Cosa fai?" else "Parla a ${target.name}"
                         )
                     }
+                    vm.stopSpeaking()
                     try {
                         speech.launch(intent)
                     } catch (e: ActivityNotFoundException) {
@@ -413,11 +417,19 @@ private fun FeedBubble(vm: GameViewModel, m: FeedMsg) {
                     fontWeight = FontWeight.Bold,
                     color = if (m.role == "npc" && !speaker.isNarrator) Color(speaker.color) else Color.Unspecified
                 )
-                TextButton(
-                    onClick = { clipboard.setText(AnnotatedString(m.text)); copied = true },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                ) {
-                    Text(if (copied) "Copiato ✓" else "Copia", style = MaterialTheme.typography.labelSmall)
+                Row {
+                    if (m.role == "npc") {
+                        TextButton(
+                            onClick = { vm.speakMsg(m, interrupt = true) },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                        ) { Text("🔊", style = MaterialTheme.typography.labelSmall) }
+                    }
+                    TextButton(
+                        onClick = { clipboard.setText(AnnotatedString(m.text)); copied = true },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Text(if (copied) "Copiato ✓" else "Copia", style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
             SelectionContainer {
@@ -528,6 +540,39 @@ private fun NpcEditor(vm: GameViewModel, n: Npc) {
             IntSliderRow("Frasi massime per risposta", n.maxSentences, 1, 15) { v ->
                 vm.updateNpc(n.id) { it.copy(maxSentences = v) }
             }
+            Text("🔊 Voce", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            var voiceMenu by remember { mutableStateOf(false) }
+            Box {
+                OutlinedButton(onClick = { voiceMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (n.voiceName.isBlank()) "Voce italiana predefinita ▾" else "${n.voiceName} ▾", maxLines = 1)
+                }
+                DropdownMenu(expanded = voiceMenu, onDismissRequest = { voiceMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Voce italiana predefinita") },
+                        onClick = { voiceMenu = false; vm.updateNpc(n.id) { it.copy(voiceName = "") } }
+                    )
+                    vm.speaker.italianVoices.forEach { v ->
+                        DropdownMenuItem(
+                            text = { Text(v) },
+                            onClick = { voiceMenu = false; vm.updateNpc(n.id) { it.copy(voiceName = v) } }
+                        )
+                    }
+                }
+            }
+            if (vm.speaker.italianVoices.size > 1) {
+                Text(
+                    "Le voci hanno nomi tecnici (es. it-it-x-itb-local): provale per trovare quelle maschili e femminili.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            SliderRow("Tono (grave ↔ acuto)", n.voicePitch, 0.5f..2f, 29) { v ->
+                vm.updateNpc(n.id) { it.copy(voicePitch = Math.round(v * 20) / 20f) }
+            }
+            SliderRow("Velocità", n.voiceRate, 0.5f..2f, 29) { v ->
+                vm.updateNpc(n.id) { it.copy(voiceRate = Math.round(v * 20) / 20f) }
+            }
+            OutlinedButton(onClick = { vm.testVoice(n) }) { Text("▶ Prova voce") }
             OutlinedButton(onClick = { confirmReset = true }) { Text("Ripristina scheda predefinita") }
         }
     }
@@ -588,6 +633,22 @@ fun ParamsScreen(vm: GameViewModel, modifier: Modifier = Modifier) {
                 "Passa all'altro provider se non risponde", p.failover,
                 "Dopo un nuovo tentativo, gli errori 429 e 503 fanno passare la richiesta all'altro provider, se ne hai la chiave."
             ) { v -> vm.updateParams { it.copy(failover = v) } }
+            SwitchRow(
+                "🔊 Leggi le risposte ad alta voce", p.ttsEnabled,
+                "Narratore e personaggi vengono letti appena rispondono, ognuno con la sua voce (si regola nella scheda Personaggi). " +
+                    "Le azioni tra asterischi usano la voce del narratore. Non consuma token."
+            ) { v -> vm.updateParams { it.copy(ttsEnabled = v) }; if (!v) vm.stopSpeaking() }
+            vm.speaker.problem?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
+            val ctx = LocalContext.current
+            OutlinedButton(onClick = {
+                try {
+                    ctx.startActivity(Intent("com.android.settings.TTS_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (e: Exception) {
+                    Toast.makeText(ctx, "Apri Impostazioni → Sistema → Lingue → Sintesi vocale", Toast.LENGTH_LONG).show()
+                }
+            }) { Text("Impostazioni sintesi vocale di Android") }
             SwitchRow(
                 "🎤 Invia subito dopo la dettatura", p.voiceAutoSend,
                 "Acceso: quello che dici al microfono parte subito. Spento: il testo finisce nel campo e lo controlli prima di premere Invia."

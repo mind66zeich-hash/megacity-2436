@@ -43,6 +43,10 @@ all'ambientazione comune e alla scheda di Adrian.
   (3 alla tua portata, 1 un po' sopra, 1 raro o illegale). Quando parli con lui compaiono le schede con **Compra**.
 - **🎤 Microfono:** il tasto accanto al campo di testo avvia la dettatura in italiano (riconoscimento vocale di Android).
   Il testo finisce nel campo; in Parametri puoi farlo inviare subito ("Invia subito dopo la dettatura").
+- **🔊 Lettura ad alta voce:** narratore e personaggi vengono letti appena rispondono (sintesi vocale di Android,
+  nessun token). Ognuno ha voce, tono e velocità propri (scheda Personaggi, con "Prova voce"); le azioni tra
+  asterischi usano la voce del narratore. 🔊 su ogni messaggio per riascoltarlo, ⏹ Stop per interrompere;
+  si spegne in Parametri.
 - `OOC: ...` parla fuori dal gioco con il personaggio selezionato (utile per correggerlo): lo scambio
   non entra nella sua memoria né nella cronologia.
 

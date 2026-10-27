@@ -53,6 +53,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     val feed = mutableStateListOf<FeedMsg>()
 
+    /** Sintesi vocale per leggere le risposte. */
+    val speaker = Speaker(app)
+
     // ---------- Crediti, inventario, catalogo di NODO-7 (gestiti dal gioco, non dall'AI) ----------
 
     var credits by mutableIntStateOf(prefs.getInt("credits", START_CREDITS))
@@ -108,6 +111,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     /** Riposo nella capsula: chat azzerata, energia piena, Adrian invisibile; il narratore descrive la scena. */
     fun rest() {
         if (busy) return
+        speaker.stop()
         energyBase = stats.totalTokens
         applyInvisible(true)
         // Come il vecchio comando "dormi": la chat si azzera (e con lei la cronologia inviata ai personaggi),
@@ -179,9 +183,28 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------- Gioco ----------
 
+    // ---------- Lettura ad alta voce ----------
+
+    fun speakMsg(m: FeedMsg, interrupt: Boolean = false) {
+        speaker.speak(speaker.split(m.text, npc(m.speakerId), npc(NARRATOR_ID)), interrupt)
+    }
+
+    fun stopSpeaking() = speaker.stop()
+
+    /** Prova la voce di un personaggio dalla scheda Personaggi. */
+    fun testVoice(n: Npc) {
+        speaker.speak(listOf(SpeechPart("Sono ${n.name}. Benvenuto nel Settore 4.", n)), interrupt = true)
+    }
+
+    override fun onCleared() {
+        speaker.shutdown()
+        super.onCleared()
+    }
+
     fun send(text: String) {
         val t = text.trim()
         if (t.isEmpty() || busy) return
+        speaker.stop()
         var who = npc(target)
         if (PURE_ACTION.matches(t)) who = npc(NARRATOR_ID)
         if (!isPresent(who)) {
@@ -196,6 +219,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     /** Spostamento: aggiorna il luogo e chiede al narratore di descrivere l'arrivo. */
     fun moveTo(location: String) {
         if (busy || location == playerLocation) return
+        speaker.stop()
         playerLocation = location
         prefs.edit().putString("location", location).apply()
         if (location == npc(DISTRIBUTOR_ID).location) markCatalogStale()
@@ -484,6 +508,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     /** Usa un oggetto: scala una carica e manda l'azione al narratore, che ne decide l'esito. */
     fun useItem(item: Item, targetId: String, detail: String) {
         if (busy || !item.usable) return
+        speaker.stop()
         val current = inventory.firstOrNull { it.id == item.id } ?: return
         val left = if (current.charges > 0) current.charges - 1 else current.charges
         inventory = when {
@@ -584,6 +609,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun addFeed(m: FeedMsg) {
         feed += m
+        if (m.role == "npc" && params.ttsEnabled) speakMsg(m)
         while (feed.size > FEED_MAX) feed.removeAt(0)
         saveFeed()
     }
@@ -626,6 +652,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     /** Nuova partita: cancella il feed e le memorie di tutti i personaggi. Le schede restano. */
     fun newGame() {
         if (busy) return
+        speaker.stop()
         feed.clear()
         memories.values.forEach { it.clearAll() }
         playerLocation = LOC_MEGACITY

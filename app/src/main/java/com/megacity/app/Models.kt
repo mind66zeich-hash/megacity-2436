@@ -50,7 +50,13 @@ data class Npc(
     val temperature: Float,
     /** Numero massimo di frasi per risposta (indicativo, va nel prompt). */
     val maxSentences: Int,
-    val color: Long
+    val color: Long,
+    /** Voce della sintesi vocale: nome tecnico del motore (vuoto = voce italiana predefinita). */
+    val voiceName: String = "",
+    /** Tono (1 = normale, più basso = più grave). */
+    val voicePitch: Float = 1f,
+    /** Velocità di lettura (1 = normale). */
+    val voiceRate: Float = 1f
 ) {
     val isNarrator get() = id == NARRATOR_ID
 
@@ -58,6 +64,7 @@ data class Npc(
         put("id", id); put("name", name); put("role", role); put("emoji", emoji)
         put("location", location); put("persona", persona)
         put("temperature", temperature.toDouble()); put("maxSentences", maxSentences); put("color", color)
+        put("voiceName", voiceName); put("voicePitch", voicePitch.toDouble()); put("voiceRate", voiceRate.toDouble())
     }
 
     companion object {
@@ -70,7 +77,10 @@ data class Npc(
             persona = o.optString("persona", d.persona),
             temperature = o.optDouble("temperature", d.temperature.toDouble()).toFloat(),
             maxSentences = o.optInt("maxSentences", d.maxSentences),
-            color = o.optLong("color", d.color)
+            color = o.optLong("color", d.color),
+            voiceName = o.optString("voiceName", d.voiceName),
+            voicePitch = o.optDouble("voicePitch", d.voicePitch.toDouble()).toFloat(),
+            voiceRate = o.optDouble("voiceRate", d.voiceRate.toDouble()).toFloat()
         )
     }
 }
@@ -85,6 +95,8 @@ val DEFAULT_NPCS: List<Npc> = listOf(
         temperature = 0.8f,
         maxSentences = 7,
         color = 0xFF8E8E93,
+        voicePitch = 1.0f,
+        voiceRate = 1.0f,
         persona =
             "Descrivi in seconda persona ciò che Adrian vede, sente e prova, e le conseguenze delle sue azioni. " +
                 "Sei anche il master: decidi tu, in modo coerente e plausibile, l'esito delle azioni rischiose " +
@@ -104,6 +116,8 @@ val DEFAULT_NPCS: List<Npc> = listOf(
         temperature = 0.85f,
         maxSentences = 5,
         color = 0xFF00B8D4,
+        voicePitch = 1.1f,
+        voiceRate = 0.95f,
         persona =
             "Sei Nysera, androide sintetico di serie Helix, l'ultimo modello prima che la linea venisse vietata. " +
                 "Aspetto: pelle sintetica pallida quasi perfetta, occhi grigio argento con un anello luminoso che pulsa " +
@@ -126,6 +140,8 @@ val DEFAULT_NPCS: List<Npc> = listOf(
         temperature = 0.8f,
         maxSentences = 5,
         color = 0xFFFFAB00,
+        voicePitch = 0.75f,
+        voiceRate = 0.85f,
         persona =
             "Sei Dorian Varga, direttore del Locale Megacity del Settore 4: club, punto d'incontro e zona franca " +
                 "dove si combinano affari che non devono lasciare tracce. Circa 50 anni, abito su misura antracite, " +
@@ -147,6 +163,8 @@ val DEFAULT_NPCS: List<Npc> = listOf(
         temperature = 0.95f,
         maxSentences = 8,
         color = 0xFFFF4FA3,
+        voicePitch = 1.25f,
+        voiceRate = 1.15f,
         persona =
             "Sei Vanessa, presenza fissa del Locale Megacity: siedi sempre allo stesso divanetto vicino al bancone, " +
                 "a pochi passi dalla vetrata di Varga. Circa 30 anni, capelli rosa neon raccolti, tatuaggi luminescenti " +
@@ -169,6 +187,8 @@ val DEFAULT_NPCS: List<Npc> = listOf(
         temperature = 0.6f,
         maxSentences = 6,
         color = 0xFF76FF03,
+        voicePitch = 0.55f,
+        voiceRate = 1.1f,
         persona =
             "Sei NODO-7, distributore automatico di materiale informatico installato in un angolo del Locale Megacity. " +
                 "Sei una macchina con un'intelligenza commerciale limitata: parli in frasi brevi, in stile terminale, " +
@@ -279,6 +299,8 @@ data class Params(
     val showDiagnostics: Boolean = false,
     /** Dopo la dettatura vocale invia subito il messaggio, senza passare dal tasto Invia. */
     val voiceAutoSend: Boolean = false,
+    /** Legge ad alta voce le risposte di personaggi e narratore. */
+    val ttsEnabled: Boolean = true,
     // Sampling
     val topP: Float = 0.95f,
     val topK: Int = 40,
@@ -310,7 +332,7 @@ data class Params(
     fun toJson(): String = JSONObject().apply {
         put("apiKey", apiKey); put("model", model)
         put("provider", provider); put("groqKey", groqKey); put("groqModel", groqModel)
-        put("failover", failover); put("showDiagnostics", showDiagnostics); put("voiceAutoSend", voiceAutoSend)
+        put("failover", failover); put("showDiagnostics", showDiagnostics); put("voiceAutoSend", voiceAutoSend); put("ttsEnabled", ttsEnabled)
         put("topP", topP.toDouble()); put("topK", topK)
         put("maxOutputTokens", maxOutputTokens); put("historyMessages", historyMessages)
         put("sessionTokenBudget", sessionTokenBudget)
@@ -336,6 +358,7 @@ data class Params(
                     failover = o.optBoolean("failover", d.failover),
                     showDiagnostics = o.optBoolean("showDiagnostics", d.showDiagnostics),
                     voiceAutoSend = o.optBoolean("voiceAutoSend", d.voiceAutoSend),
+                    ttsEnabled = o.optBoolean("ttsEnabled", d.ttsEnabled),
                     topP = o.optDouble("topP", d.topP.toDouble()).toFloat(),
                     topK = o.optInt("topK", d.topK),
                     maxOutputTokens = o.optInt("maxOutputTokens", d.maxOutputTokens),
