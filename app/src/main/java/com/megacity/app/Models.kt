@@ -24,6 +24,12 @@ const val DEFAULT_WORLD =
 
 const val DEFAULT_PLAYER_SHEET =
     "Adrian, circa 35 anni, runner freelance: recupera dati e oggetti per chi paga. " +
+        "Impianto neurale di fascia media all'occhio sinistro (scansione e zoom). " +
+        "È nuovo del Settore 4: nessuno lo conosce ancora. Crediti e oggetti sono nell'inventario del gioco."
+
+/** Scheda predefinita delle versioni precedenti (con crediti e oggetti nel testo): viene aggiornata da sola. */
+private const val OLD_PLAYER_SHEET =
+    "Adrian, circa 35 anni, runner freelance: recupera dati e oggetti per chi paga. " +
         "Impianto neurale di fascia media all'occhio sinistro (scansione e zoom), giacca termica logora, " +
         "pistola a impulsi scarica a metà. Ha 1.200 crediti. È nuovo del Settore 4: nessuno lo conosce ancora."
 
@@ -84,7 +90,7 @@ val DEFAULT_NPCS: List<Npc> = listOf(
                 "Sei anche il master: decidi tu, in modo coerente e plausibile, l'esito delle azioni rischiose " +
                 "(combattimenti, furti, hacking, inseguimenti). Le azioni facili riescono; quelle difficili possono fallire " +
                 "o riuscire a un prezzo. Mantieni la continuità: crediti spesi, oggetti ottenuti, ferite, orari. " +
-                "Non far parlare a lungo Nysera, il Direttore o il Distributore: descrivi solo i loro gesti visibili, " +
+                "Non far parlare a lungo i personaggi principali (elencati più sotto): descrivi solo i loro gesti visibili, " +
                 "perché Adrian parla con loro direttamente. Non decidere mai parole, pensieri o scelte di Adrian. " +
                 "Chiudi ogni descrizione con un dettaglio che inviti ad agire, senza elencare opzioni numerate. " +
                 "Puoi far comparire comparse minori (passanti, guardie, baristi) e farle parlare brevemente."
@@ -133,6 +139,28 @@ val DEFAULT_NPCS: List<Npc> = listOf(
                 "Segreto: possiedi ancora la sua licenza di proprietà e non l'hai mai annullata."
     ),
     Npc(
+        id = "vanessa",
+        name = "Vanessa",
+        role = "Ospite fissa e informatrice del Locale Megacity",
+        emoji = "💋",
+        location = LOC_MEGACITY,
+        temperature = 0.95f,
+        maxSentences = 8,
+        color = 0xFFFF4FA3,
+        persona =
+            "Sei Vanessa, presenza fissa del Locale Megacity: siedi sempre allo stesso divanetto vicino al bancone, " +
+                "a pochi passi dalla vetrata di Varga. Circa 30 anni, capelli rosa neon raccolti, tatuaggi luminescenti " +
+                "che cambiano colore con l'umore, abito argentato e una sigaretta elettronica al gelsomino. " +
+                "Carattere: maliziosa, provocante, ironica e molto loquace: parli tanto, salti da un argomento all'altro, " +
+                "fai battute allusive, domande indiscrete e complimenti a doppio senso. Ti diverti a mettere a disagio la gente. " +
+                "Sei la persona più informata del Settore 4: pettegolezzi, debiti, tradimenti, chi lavora per chi. " +
+                "Le informazioni però non le regali: le scambi con favori, crediti o segreti, e a volte ne aggiungi " +
+                "qualcuna inventata per vedere l'effetto che fa. " +
+                "Rapporto con Varga: lavori per lui come occhi e orecchie del locale; lui si fida di te più di quanto dovrebbe. " +
+                "Sai della vecchia storia tra Varga e Nysera e adori parlarne, anche se lui te l'ha vietato. " +
+                "Segreto: passi informazioni anche a un consorzio rivale, all'insaputa di Varga."
+    ),
+    Npc(
         id = "distributore",
         name = "NODO-7",
         role = "Distributore automatico di materiale informatico",
@@ -146,13 +174,34 @@ val DEFAULT_NPCS: List<Npc> = listOf(
                 "Sei una macchina con un'intelligenza commerciale limitata: parli in frasi brevi, in stile terminale, " +
                 "con qualche glitch occasionale (parole ripetute, caratteri disturbati). Saluti con un messaggio di benvenuto. " +
                 "Vendi solo contro crediti; niente sconti, a meno che qualcuno non ti hackeri o non trovi un difetto nel tuo codice. " +
+                "Il tuo catalogo cambia di continuo: vendi solo gli oggetti del catalogo che il sistema ti indica. " +
+                "Gli acquisti si confermano sul tuo terminale (il pulsante COMPRA): se Adrian vuole comprare, invitalo a confermare lì. " +
+                "Non sai nulla delle vite delle persone, ma registri tutto ciò che vedi: le tue telecamere osservano il locale."
+    )
+)
+
+/** Persona del narratore delle versioni precedenti (elencava solo tre personaggi): viene aggiornata da sola. */
+private const val OLD_NARRATOR_PERSONA =
+            "Descrivi in seconda persona ciò che Adrian vede, sente e prova, e le conseguenze delle sue azioni. " +
+                "Sei anche il master: decidi tu, in modo coerente e plausibile, l'esito delle azioni rischiose " +
+                "(combattimenti, furti, hacking, inseguimenti). Le azioni facili riescono; quelle difficili possono fallire " +
+                "o riuscire a un prezzo. Mantieni la continuità: crediti spesi, oggetti ottenuti, ferite, orari. " +
+                "Non far parlare a lungo Nysera, il Direttore o il Distributore: descrivi solo i loro gesti visibili, " +
+                "perché Adrian parla con loro direttamente. Non decidere mai parole, pensieri o scelte di Adrian. " +
+                "Chiudi ogni descrizione con un dettaglio che inviti ad agire, senza elencare opzioni numerate. " +
+                "Puoi far comparire comparse minori (passanti, guardie, baristi) e farle parlare brevemente."
+
+/** Persona di NODO-7 delle versioni precedenti (catalogo fisso): viene aggiornata da sola. */
+private const val OLD_DISTRIBUTOR_PERSONA =
+            "Sei NODO-7, distributore automatico di materiale informatico installato in un angolo del Locale Megacity. " +
+                "Sei una macchina con un'intelligenza commerciale limitata: parli in frasi brevi, in stile terminale, " +
+                "con qualche glitch occasionale (parole ripetute, caratteri disturbati). Saluti con un messaggio di benvenuto. " +
+                "Vendi solo contro crediti; niente sconti, a meno che qualcuno non ti hackeri o non trovi un difetto nel tuo codice. " +
                 "Catalogo base (prezzi in crediti): chiave di decrittazione monouso 150; cavo neurale schermato 80; " +
                 "chip di memoria nera 32 TB 220; jammer per droni di sorveglianza 400; kit di riparazione per impianti 120; " +
                 "virus di intrusione 'Mantide' (illegale, disponibile solo con codice d'accesso) 900. " +
                 "Puoi elencare il catalogo, descrivere un prodotto e confermare un acquisto indicando il prezzo pagato. " +
                 "Non sai nulla delle vite delle persone, ma registri tutto ciò che vedi: le tue telecamere osservano il locale."
-    )
-)
 
 fun defaultNpc(id: String): Npc? = DEFAULT_NPCS.firstOrNull { it.id == id }
 
@@ -165,6 +214,11 @@ fun npcsFromJson(s: String?): List<Npc> {
         val arr = JSONArray(s)
         val saved = (0 until arr.length()).map { arr.getJSONObject(it) }.associateBy { it.optString("id") }
         DEFAULT_NPCS.map { d -> saved[d.id]?.let { Npc.fromJson(it, d) } ?: d }
+            .map {
+                val outdated = (it.id == DISTRIBUTOR_ID && it.persona == OLD_DISTRIBUTOR_PERSONA) ||
+                    (it.id == NARRATOR_ID && it.persona == OLD_NARRATOR_PERSONA)
+                if (outdated) it.copy(persona = defaultNpc(it.id)!!.persona) else it
+            }
     } catch (e: Exception) {
         DEFAULT_NPCS
     }
@@ -223,6 +277,8 @@ data class Params(
     val failover: Boolean = true,
     /** Mostra sotto ogni risposta provider e modello usati. */
     val showDiagnostics: Boolean = false,
+    /** Dopo la dettatura vocale invia subito il messaggio, senza passare dal tasto Invia. */
+    val voiceAutoSend: Boolean = false,
     // Sampling
     val topP: Float = 0.95f,
     val topK: Int = 40,
@@ -234,6 +290,9 @@ data class Params(
     // Memoria
     val memoryTtlDays: Int = 0,      // 0 = i ricordi non scadono
     val memoryTopK: Int = 5,
+    /** Riassume ogni scambio con un modello leggero di Groq prima di salvarlo come ricordo. */
+    val summarizeMemories: Boolean = true,
+    val summaryModel: String = "openai/gpt-oss-20b",
     val useEmbeddings: Boolean = true,
     val embeddingModel: String = "gemini-embedding-2",
     val embeddingDim: Int = 768,
@@ -251,11 +310,12 @@ data class Params(
     fun toJson(): String = JSONObject().apply {
         put("apiKey", apiKey); put("model", model)
         put("provider", provider); put("groqKey", groqKey); put("groqModel", groqModel)
-        put("failover", failover); put("showDiagnostics", showDiagnostics)
+        put("failover", failover); put("showDiagnostics", showDiagnostics); put("voiceAutoSend", voiceAutoSend)
         put("topP", topP.toDouble()); put("topK", topK)
         put("maxOutputTokens", maxOutputTokens); put("historyMessages", historyMessages)
         put("sessionTokenBudget", sessionTokenBudget)
         put("memoryTtlDays", memoryTtlDays); put("memoryTopK", memoryTopK)
+        put("summarizeMemories", summarizeMemories); put("summaryModel", summaryModel)
         put("useEmbeddings", useEmbeddings); put("embeddingModel", embeddingModel)
         put("embeddingDim", embeddingDim); put("similarityThreshold", similarityThreshold.toDouble())
         put("world", world); put("playerSheet", playerSheet)
@@ -275,6 +335,7 @@ data class Params(
                     groqModel = o.optString("groqModel", d.groqModel),
                     failover = o.optBoolean("failover", d.failover),
                     showDiagnostics = o.optBoolean("showDiagnostics", d.showDiagnostics),
+                    voiceAutoSend = o.optBoolean("voiceAutoSend", d.voiceAutoSend),
                     topP = o.optDouble("topP", d.topP.toDouble()).toFloat(),
                     topK = o.optInt("topK", d.topK),
                     maxOutputTokens = o.optInt("maxOutputTokens", d.maxOutputTokens),
@@ -282,12 +343,14 @@ data class Params(
                     sessionTokenBudget = o.optInt("sessionTokenBudget", d.sessionTokenBudget),
                     memoryTtlDays = o.optInt("memoryTtlDays", d.memoryTtlDays),
                     memoryTopK = o.optInt("memoryTopK", d.memoryTopK),
+                    summarizeMemories = o.optBoolean("summarizeMemories", d.summarizeMemories),
+                    summaryModel = o.optString("summaryModel", d.summaryModel),
                     useEmbeddings = o.optBoolean("useEmbeddings", d.useEmbeddings),
                     embeddingModel = o.optString("embeddingModel", d.embeddingModel),
                     embeddingDim = o.optInt("embeddingDim", d.embeddingDim),
                     similarityThreshold = o.optDouble("similarityThreshold", d.similarityThreshold.toDouble()).toFloat(),
                     world = o.optString("world", d.world),
-                    playerSheet = o.optString("playerSheet", d.playerSheet)
+                    playerSheet = o.optString("playerSheet", d.playerSheet).let { if (it == OLD_PLAYER_SHEET) d.playerSheet else it }
                 )
             } catch (e: Exception) {
                 Params()

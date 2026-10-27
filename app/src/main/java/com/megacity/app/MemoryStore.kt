@@ -32,7 +32,9 @@ data class MemEntry(
     val criticality: String,
     val goalId: String,
     val taskId: String,
-    val layer: Layer
+    val layer: Layer,
+    /** Testo originale completo quando content è un riassunto; vuoto altrimenti. */
+    val fullText: String = ""
 ) {
     fun isExpired(now: Long) = ttlDays > 0 && timestamp + ttlDays * 86_400_000L < now
     fun isActive(now: Long) = supersededBy == null && !isExpired(now)
@@ -44,6 +46,7 @@ data class MemEntry(
         put("validation_status", validationStatus); put("context_hash", contextHash)
         put("criticality", criticality); put("goal_id", goalId); put("task_id", taskId)
         put("layer", layer.name)
+        if (fullText.isNotEmpty()) put("full_text", fullText)
     }
 
     companion object {
@@ -61,7 +64,8 @@ data class MemEntry(
             criticality = o.optString("criticality", "low"),
             goalId = o.optString("goal_id", "G0"),
             taskId = o.optString("task_id", "T0"),
-            layer = runCatching { Layer.valueOf(o.getString("layer")) }.getOrDefault(Layer.EPISODIC)
+            layer = runCatching { Layer.valueOf(o.getString("layer")) }.getOrDefault(Layer.EPISODIC),
+            fullText = o.optString("full_text", "")
         )
     }
 }
@@ -125,7 +129,8 @@ class MemoryStore(context: Context, val ownerId: String) {
         ttlDays: Int,
         confidence: Double = 0.5,
         validation: String = "unverified",
-        criticality: String = "low"
+        criticality: String = "low",
+        fullText: String = ""
     ): MemEntry {
         val e = MemEntry(
             id = UUID.randomUUID().toString().take(8),
@@ -134,7 +139,8 @@ class MemoryStore(context: Context, val ownerId: String) {
             confidence = confidence, ttlDays = ttlDays, supersededBy = null,
             validationStatus = validation,
             contextHash = Integer.toHexString(content.hashCode()),
-            criticality = criticality, goalId = "G0", taskId = "T0", layer = layer
+            criticality = criticality, goalId = "G0", taskId = "T0", layer = layer,
+            fullText = fullText
         )
         entries += e
         persist()

@@ -44,7 +44,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val tabs = listOf("🎮" to "Gioco", "🎭" to "Personaggi", "⚙️" to "Parametri", "🧠" to "Memoria")
+private val tabs = listOf(
+    "🎮" to "Gioco", "🎭" to "Personaggi", "⚙️" to "Parametri", "🧠" to "Memoria", "🎒" to "Inventario"
+)
 
 @Composable
 fun App(vm: GameViewModel = viewModel()) {
@@ -68,7 +70,8 @@ fun App(vm: GameViewModel = viewModel()) {
             0 -> GameScreen(vm, m)
             1 -> CharactersScreen(vm, m)
             2 -> ParamsScreen(vm, m)
-            else -> MemoryScreen(vm, m)
+            3 -> MemoryScreen(vm, m)
+            else -> InventoryScreen(vm, onUsed = { tab = 0 }, modifier = m)
         }
     }
 }

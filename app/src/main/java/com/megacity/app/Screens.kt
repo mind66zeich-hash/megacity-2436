@@ -1,5 +1,12 @@
 package com.megacity.app
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -14,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -45,6 +53,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -100,6 +109,13 @@ fun GameScreen(vm: GameViewModel, modifier: Modifier = Modifier) {
                     }
                 }
             }
+            Text(
+                "💳 %,d ¢".format(vm.credits),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFFFD54F),
+                modifier = Modifier.padding(start = 10.dp)
+            )
         }
 
         EnergyBar(vm)
@@ -157,6 +173,10 @@ fun GameScreen(vm: GameViewModel, modifier: Modifier = Modifier) {
             }
         }
 
+        if (vm.target == DISTRIBUTOR_ID && vm.isPresent(vm.npc(DISTRIBUTOR_ID))) {
+            CatalogStrip(vm)
+        }
+
         // Scelta dell'interlocutore
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 4.dp),
@@ -178,6 +198,42 @@ fun GameScreen(vm: GameViewModel, modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // Dettatura vocale con il riconoscimento di Android (italiano).
+            val context = LocalContext.current
+            val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+                val spoken = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim()
+                if (res.resultCode == Activity.RESULT_OK && !spoken.isNullOrEmpty()) {
+                    val text = if (input.isBlank()) spoken else "${input.trimEnd()} $spoken"
+                    if (vm.params.voiceAutoSend) {
+                        vm.send(text); input = ""
+                    } else {
+                        input = text
+                    }
+                }
+            }
+            OutlinedButton(
+                onClick = {
+                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE, "it-IT")
+                        putExtra(
+                            RecognizerIntent.EXTRA_PROMPT,
+                            if (target.isNarrator) "Cosa fai?" else "Parla a ${target.name}"
+                        )
+                    }
+                    try {
+                        speech.launch(intent)
+                    } catch (e: ActivityNotFoundException) {
+                        Toast.makeText(
+                            context,
+                            "Riconoscimento vocale non disponibile: installa o attiva l'app Google.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                },
+                enabled = !vm.busy,
+                contentPadding = PaddingValues(horizontal = 10.dp)
+            ) { Text("🎤") }
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
@@ -191,6 +247,44 @@ fun GameScreen(vm: GameViewModel, modifier: Modifier = Modifier) {
                 onClick = { vm.send(input); input = "" },
                 enabled = input.isNotBlank() && !vm.busy
             ) { Text(if (vm.busy) "…" else "Invia") }
+        }
+    }
+}
+
+/** Catalogo di NODO-7 con i pulsanti Compra (visibile quando parli con il distributore). */
+@Composable
+private fun CatalogStrip(vm: GameViewModel) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
+        if (vm.catalogStale || vm.catalog.isEmpty()) {
+            Text(
+                "🖥️ Catalogo in aggiornamento: scrivi a ${vm.npc(DISTRIBUTOR_ID).name} per vedere i nuovi oggetti.",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            return@Column
+        }
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            vm.catalog.forEach { item ->
+                Card(Modifier.width(210.dp)) {
+                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("${item.emoji} ${item.name}", fontWeight = FontWeight.Bold, maxLines = 2)
+                        Text(
+                            "${item.type} · cariche ${item.chargesLabel}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(item.description, style = MaterialTheme.typography.bodySmall, maxLines = 3)
+                        Button(
+                            onClick = { vm.buy(item) },
+                            enabled = !vm.busy && vm.credits >= item.price,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Compra · ${item.price} ¢") }
+                    }
+                }
+            }
         }
     }
 }
@@ -368,7 +462,7 @@ fun CharactersScreen(vm: GameViewModel, modifier: Modifier = Modifier) {
 
         Section("🧍 Adrian (tu)") {
             Text(
-                "Chi sei, cosa porti con te, quanti crediti hai. Tutti i personaggi la leggono.",
+                "Chi sei: aspetto, mestiere, impianti, carattere. Tutti i personaggi la leggono. Crediti e oggetti sono nella scheda Inventario.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -495,6 +589,10 @@ fun ParamsScreen(vm: GameViewModel, modifier: Modifier = Modifier) {
                 "Dopo un nuovo tentativo, gli errori 429 e 503 fanno passare la richiesta all'altro provider, se ne hai la chiave."
             ) { v -> vm.updateParams { it.copy(failover = v) } }
             SwitchRow(
+                "🎤 Invia subito dopo la dettatura", p.voiceAutoSend,
+                "Acceso: quello che dici al microfono parte subito. Spento: il testo finisce nel campo e lo controlli prima di premere Invia."
+            ) { v -> vm.updateParams { it.copy(voiceAutoSend = v) } }
+            SwitchRow(
                 "Mostra provider sotto le risposte", p.showDiagnostics,
                 "Aggiunge sotto ogni risposta provider, modello e tempo impiegato."
             ) { v -> vm.updateParams { it.copy(showDiagnostics = v) } }
@@ -598,6 +696,26 @@ fun ParamsScreen(vm: GameViewModel, modifier: Modifier = Modifier) {
             IntSliderRow(
                 "Ricordi richiamati per risposta", p.memoryTopK, 0, 20
             ) { v -> vm.updateParams { it.copy(memoryTopK = v) } }
+            SwitchRow(
+                "Riassumi i ricordi", p.summarizeMemories,
+                "Dopo ogni risposta un modello leggero di Groq riassume lo scambio dal punto di vista del personaggio " +
+                    "(narratore compreso). Serve la chiave Groq. I token usati scaricano l'energia di Adrian. " +
+                    "Se il riassunto non riesce, si salva il testo originale."
+            ) { v -> vm.updateParams { it.copy(summarizeMemories = v) } }
+            OutlinedTextField(
+                value = p.summaryModel,
+                onValueChange = { v -> vm.updateParams { it.copy(summaryModel = v.trim()) } },
+                label = { Text("Modello per i riassunti (Groq)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (p.summarizeMemories && p.groqKey.isBlank()) {
+                Text(
+                    "Manca la chiave Groq: i ricordi vengono salvati senza riassunto.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
             SwitchRow(
                 "Richiamo per similarità (embedding)", p.useEmbeddings,
                 "Usa la chiave Gemini. Ogni ricordo e ogni messaggio fanno una chiamata embedding in più."
@@ -757,7 +875,23 @@ fun MemoryScreen(vm: GameViewModel, modifier: Modifier = Modifier) {
                         Text(fmt.format(Date(e.timestamp)), style = MaterialTheme.typography.labelSmall)
                     }
                     Spacer(Modifier.height(4.dp))
-                    Text(e.content, maxLines = 8)
+                    SelectionContainer { Text(e.content) }
+                    if (e.fullText.isNotEmpty()) {
+                        var showOriginal by remember(e.id) { mutableStateOf(false) }
+                        TextButton(
+                            onClick = { showOriginal = !showOriginal },
+                            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
+                        ) { Text(if (showOriginal) "Nascondi originale" else "Mostra originale") }
+                        if (showOriginal) {
+                            SelectionContainer {
+                                Text(
+                                    e.fullText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             "ttl ${if (e.ttlDays == 0) "∞" else "${e.ttlDays}gg"} · " +
@@ -775,5 +909,118 @@ fun MemoryScreen(vm: GameViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
+    }
+}
+
+// =====================================================================
+// INVENTARIO
+// =====================================================================
+
+@Composable
+fun InventoryScreen(vm: GameViewModel, onUsed: () -> Unit, modifier: Modifier = Modifier) {
+    var using by remember { mutableStateOf<Item?>(null) }
+    var dropping by remember { mutableStateOf<Item?>(null) }
+
+    LazyColumn(
+        modifier.fillMaxSize(),
+        contentPadding = PaddingValues(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("💳 Crediti", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "%,d ¢".format(vm.credits),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFFD54F)
+                    )
+                }
+            }
+        }
+        item {
+            Text(
+                "Gli oggetti si comprano da ${vm.npc(DISTRIBUTOR_ID).name} o si ottengono nel gioco. " +
+                    "\"Usa\" scala una carica e manda l'azione al narratore, che ne decide l'esito.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (vm.inventory.isEmpty()) {
+            item { Text("🎒 L'inventario è vuoto.") }
+        }
+        items(vm.inventory, key = { it.id }) { item ->
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("${item.emoji} ${item.name}", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        Text(
+                            if (item.charges < 0) item.type else "${item.type} · cariche ${item.charges}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (item.usable) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
+                        )
+                    }
+                    if (item.description.isNotBlank()) Text(item.description, style = MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { using = item }, enabled = item.usable && !vm.busy) {
+                            Text(if (item.usable) "Usa" else "Scarico")
+                        }
+                        TextButton(onClick = { dropping = item }, enabled = !vm.busy) { Text("Lascia") }
+                    }
+                }
+            }
+        }
+    }
+
+    using?.let { item ->
+        var targetId by remember(item.id) { mutableStateOf(NARRATOR_ID) }
+        var detail by remember(item.id) { mutableStateOf("") }
+        val present = vm.npcs.filter { !it.isNarrator && vm.isPresent(it) }
+        AlertDialog(
+            onDismissRequest = { using = null },
+            title = { Text("Usa ${item.name}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Su chi o su cosa?", style = MaterialTheme.typography.labelLarge)
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        CharChip("📍 Sulla scena", Color(0xFF8E8E93), targetId == NARRATOR_ID, true) { targetId = NARRATOR_ID }
+                        present.forEach { n ->
+                            CharChip("${n.emoji} ${n.name}", Color(n.color), targetId == n.id, true) { targetId = n.id }
+                        }
+                    }
+                    OutlinedTextField(
+                        value = detail, onValueChange = { detail = it },
+                        modifier = Modifier.fillMaxWidth(), minLines = 2,
+                        placeholder = { Text("Come o su cosa (facoltativo): es. sulla serratura della porta") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.useItem(item, targetId, detail)
+                    using = null
+                    onUsed()
+                }) { Text("Usa") }
+            },
+            dismissButton = { TextButton(onClick = { using = null }) { Text("Annulla") } }
+        )
+    }
+
+    dropping?.let { item ->
+        AlertDialog(
+            onDismissRequest = { dropping = null },
+            title = { Text("Lasciare ${item.name}?") },
+            text = { Text("L'oggetto verrà tolto dall'inventario.") },
+            confirmButton = { TextButton(onClick = { vm.dropItem(item); dropping = null }) { Text("Lascia") } },
+            dismissButton = { TextButton(onClick = { dropping = null }) { Text("Annulla") } }
+        )
     }
 }

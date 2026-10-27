@@ -41,7 +41,9 @@ object GroqClient {
         p: Params,
         temperature: Float,
         system: String,
-        contents: List<Pair<String, String>>
+        contents: List<Pair<String, String>>,
+        /** Per i modelli che ragionano (GPT-OSS): "low" accorcia il ragionamento e riduce i token. */
+        reasoningEffort: String? = null
     ): GeminiResult = withContext(Dispatchers.IO) {
         require(p.groqKey.isNotBlank()) { "API key Groq mancante: inseriscila in Parametri." }
 
@@ -66,6 +68,8 @@ object GroqClient {
                 put("tools", JSONArray().put(JSONObject().put("type", "browser_search")))
                 put("tool_choice", if (p.groqForceSearch) "required" else "auto")
                 put("reasoning_effort", "low") // consigliato da Groq: sessioni di ricerca più brevi
+            } else if (reasoningEffort != null) {
+                put("reasoning_effort", reasoningEffort)
             }
         }
 

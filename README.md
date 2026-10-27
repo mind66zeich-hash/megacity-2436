@@ -22,7 +22,8 @@ o in **Parametri**. La chiave resta sul telefono.
 | 📖 Narratore | ovunque | Descrive scene ed esiti delle azioni, fa da master: per ora decide l'AI le regole |
 | 🤖 Nysera | Laboratorio Helix – Livello 112 | Androide sintetico ultra avanzato; ex relazione con Varga |
 | 🕴️ Varga | Locale Megacity – Settore 4 | Direttore del locale; ex relazione con Nysera |
-| 🖥️ NODO-7 | Locale Megacity – Settore 4 | Distributore di materiale informatico, con catalogo e prezzi |
+| 💋 Vanessa | Locale Megacity – Settore 4 | Maliziosa e loquace, informatrice di Varga (e non solo) |
+| 🖥️ NODO-7 | Locale Megacity – Settore 4 | Distributore di materiale informatico, catalogo dinamico |
 
 Nomi, aspetto, personalità, segreti e luoghi si modificano nella scheda **Personaggi**, insieme
 all'ambientazione comune e alla scheda di Adrian.
@@ -35,6 +36,13 @@ all'ambientazione comune e alla scheda di Adrian.
 - **⚡ Energia di Adrian:** scende con i token usati nella sessione (limite in Parametri, predefinito 100.000).
   Il tasto **🛌 Riposa** (nella capsula) si può usare in qualsiasi momento, ed è evidenziato quando l'energia arriva a zero: come il vecchio "dormi" azzera la chat (le memorie restano), energia di nuovo piena, Adrian viene incapsulato e diventa invisibile
   ai personaggi (sentono solo la sua voce), ma puoi continuare a giocare. **Esci dalla capsula** lo rende di nuovo visibile.
+- **💳 Crediti e 🎒 Inventario** sono gestiti dal gioco (si parte con 1.200 ¢, pistola a impulsi e giacca termica).
+  Narratore e personaggi possono dare o togliere crediti e oggetti: l'app li applica e lo segnala in chat.
+  Nella scheda **Inventario** ogni oggetto ha **Usa** (scala una carica e manda l'azione al narratore) e **Lascia**.
+- **NODO-7** rinnova il catalogo ogni volta che arrivi al Locale Megacity: 5 oggetti calibrati sui tuoi crediti
+  (3 alla tua portata, 1 un po' sopra, 1 raro o illegale). Quando parli con lui compaiono le schede con **Compra**.
+- **🎤 Microfono:** il tasto accanto al campo di testo avvia la dettatura in italiano (riconoscimento vocale di Android).
+  Il testo finisce nel campo; in Parametri puoi farlo inviare subito ("Invia subito dopo la dettatura").
 - `OOC: ...` parla fuori dal gioco con il personaggio selezionato (utile per correggerlo): lo scambio
   non entra nella sua memoria né nella cronologia.
 
@@ -43,6 +51,12 @@ all'ambientazione comune e alla scheda di Adrian.
 Ogni personaggio ha i suoi file (`memorie/<id>_payload.json`, `_index.bin`, `_event_log.jsonl`).
 Un PNG riceve solo i propri scambi con Adrian, i propri ricordi e l'ultima descrizione del narratore
 nel luogo in cui si trova. Il narratore vede tutta la storia recente.
+
+**Ricordi riassunti:** dopo ogni risposta, in background, un modello leggero di Groq (predefinito
+`openai/gpt-oss-20b`) riassume lo scambio dal punto di vista del personaggio (il narratore come cronaca).
+Il riassunto diventa il ricordo; il testo originale completo resta visibile con "Mostra originale".
+I token dei riassunti scaricano l'energia di Adrian. Senza chiave Groq, o se il riassunto fallisce,
+si salva il testo originale. Si disattiva e si cambia modello in Parametri → Memoria.
 
 Nella scheda **Memoria** scegli il personaggio, leggi o cancelli i suoi ricordi e aggiungi fatti che
 conoscerà solo lui (restano sempre presenti nel suo prompt).

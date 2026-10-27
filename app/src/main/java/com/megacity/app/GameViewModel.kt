@@ -53,6 +53,21 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     val feed = mutableStateListOf<FeedMsg>()
 
+    // ---------- Crediti, inventario, catalogo di NODO-7 (gestiti dal gioco, non dall'AI) ----------
+
+    var credits by mutableIntStateOf(prefs.getInt("credits", START_CREDITS))
+        private set
+    var inventory by mutableStateOf(
+        if (prefs.contains("inventory")) itemsFromJson(prefs.getString("inventory", null)) else START_INVENTORY
+    )
+        private set
+    /** I 5 oggetti in vendita ora da NODO-7. */
+    var catalog by mutableStateOf(itemsFromJson(prefs.getString("catalog", null)))
+        private set
+    /** Vero dopo l'arrivo al Locale Megacity: NODO-7 genererà un nuovo catalogo alla prossima interazione. */
+    var catalogStale by mutableStateOf(prefs.getBoolean("catalogStale", true))
+        private set
+
     /** Una memoria indipendente per ogni personaggio (file separati). */
     val memories: Map<String, MemoryStore> = DEFAULT_NPCS.associate { it.id to MemoryStore(app, it.id) }
 
@@ -183,6 +198,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         if (busy || location == playerLocation) return
         playerLocation = location
         prefs.edit().putString("location", location).apply()
+        if (location == npc(DISTRIBUTOR_ID).location) markCatalogStale()
         if (!isPresent(npc(target))) selectTarget(NARRATOR_ID)
         val t = "*Adrian si dirige verso: $location*"
         addFeed(FeedMsg("player", PLAYER_ID, NARRATOR_ID, t, location))
@@ -209,18 +225,15 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 noteProvider(o)
                 registerCall(r)
                 val meta = if (p.showDiagnostics) "${Llm.label(o.provider)} · ${o.model} · ${r.latencyMs} ms" else ""
-                addFeed(FeedMsg("npc", who.id, PLAYER_ID, r.text, playerLocation, meta = meta, ooc = ooc))
+                val (shown, fx) = parseEffects(r.text)
+                addFeed(FeedMsg("npc", who.id, PLAYER_ID, shown.ifBlank { "…" }, playerLocation, meta = meta, ooc = ooc))
+                val fxLog = if (ooc) "" else applyEffects(who, fx)
                 if (!ooc) {
-                    val content = if (who.isNarrator) {
-                        "[$playerLocation] Adrian: ${playerText.take(300)} | Esito: ${r.text.take(500)}"
-                    } else {
-                        "[$playerLocation] Adrian: ${playerText.take(300)} | ${who.name}: ${r.text.take(500)}"
-                    }
-                    val saved = store.add(
-                        Layer.EPISODIC, "dialogo", content,
-                        source = who.id, ttlDays = p.memoryTtlDays
-                    )
-                    viewModelScope.launch { embedEntry(store, saved) }
+                    // Il ricordo si salva in background: riassunto con il modello leggero, o testo originale se non riesce.
+                    val loc = playerLocation
+                    val epoch = gameEpoch
+                    val remembered = if (fxLog.isEmpty()) shown else "$shown\n[Effetti: $fxLog]"
+                    viewModelScope.launch { saveMemory(p, store, who, loc, playerText, remembered, epoch) }
                 }
             }
             .onFailure { e ->
@@ -233,6 +246,60 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         typing = null
         busy = false
     }
+
+    // ---------- Ricordi riassunti ----------
+
+    /** Cambia a ogni nuova partita: un salvataggio in background iniziato prima viene scartato. */
+    private var gameEpoch = 0
+
+    private suspend fun saveMemory(
+        p: Params, store: MemoryStore, who: Npc, loc: String,
+        playerText: String, reply: String, epoch: Int
+    ) {
+        val original = "[$loc] Adrian: ${playerText.take(3000)}\n" +
+            (if (who.isNarrator) "Esito: " else "${who.name}: ") + reply.take(3000)
+        val summary = if (p.summarizeMemories && p.groqKey.isNotBlank()) summarize(p, who, original) else null
+        if (epoch != gameEpoch) return
+        val saved = if (summary != null) {
+            store.add(
+                Layer.EPISODIC, "riassunto", "[$loc] $summary",
+                source = who.id, ttlDays = p.memoryTtlDays, fullText = original
+            )
+        } else {
+            store.add(Layer.EPISODIC, "dialogo", original, source = who.id, ttlDays = p.memoryTtlDays)
+        }
+        memoryVersion++
+        embedEntry(store, saved)
+    }
+
+    /** Riassunto dello scambio con il modello leggero di Groq. I token contano per l'energia di Adrian. */
+    private suspend fun summarize(p: Params, who: Npc, original: String): String? {
+        val system = if (who.isNarrator) {
+            "Sei il modulo di memoria del Narratore di un gioco di ruolo cyberpunk ambientato nel 2436. " +
+                "Riassumi lo scambio in 1-3 frasi in italiano, in terza persona, come cronaca della storia. "
+        } else {
+            "Sei il modulo di memoria di ${who.name} (${who.role}) in un gioco di ruolo cyberpunk ambientato nel 2436. " +
+                "Riassumi lo scambio in 1-3 frasi in italiano, in prima persona dal punto di vista di ${who.name}. "
+        } + "Conserva: nomi, luoghi, promesse, accordi, prezzi e crediti, oggetti dati o ricevuti, " +
+            "informazioni rivelate o tenute nascoste, cambiamenti di atteggiamento verso Adrian. " +
+            "Niente premesse né commenti: scrivi solo il riassunto."
+        return try {
+            val r = GroqClient.generate(
+                p.copy(groqModel = p.summaryModel.trim(), maxOutputTokens = 1024),
+                0.2f, system, listOf("user" to original), reasoningEffort = "low"
+            )
+            registerCall(r)
+            stats = stats.copy(groqCalls = stats.groqCalls + 1)
+            r.text.trim().takeIf { it.isNotEmpty() }?.take(1200)
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            stats = stats.copy(requests = stats.requests + 1, errors = stats.errors + 1)
+            store(who).log("summary_error", e.message.orEmpty().take(200))
+            null
+        }
+    }
+
+    private fun store(n: Npc): MemoryStore = memories.getValue(n.id)
 
     // ---------- Prompt ----------
 
@@ -259,6 +326,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                     "se parla senti solo una voce senza corpo. Reagisci come farebbe ${n.name} davanti a una voce invisibile."
             )
         }
+        append("\nCIÒ CHE ADRIAN PORTA CON SÉ (lo conosci solo se è visibile o se te lo mostra): ")
+        append(if (inventory.isEmpty()) "niente." else inventory.joinToString("; ") { it.name })
+        if (n.id == DISTRIBUTOR_ID) append(catalogInstructions())
         append("\n\nLUOGO ATTUALE: ${n.location}")
         lastSceneHere()?.let { append("\nULTIMA DESCRIZIONE DELLA SCENA: $it") }
         append(recalledBlock("RICORDI DI ${n.name.uppercase()} (solo tuoi: gli altri personaggi non li conoscono)", recalled))
@@ -273,6 +343,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 "- Resta sempre nel personaggio. Unica eccezione: se il messaggio inizia con \"OOC:\", " +
                 "rispondi brevemente fuori dal gioco, come autore del personaggio."
         )
+        append("\n\n").append(EFFECTS_RULES)
     }
 
     private fun narratorPrompt(p: Params, n: Npc, recalled: List<MemEntry>): String = buildString {
@@ -286,6 +357,10 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                     "Nessuno può vederlo, ma lui può muoversi, osservare e parlare. Tienine conto nelle reazioni di comparse e personaggi."
             )
         }
+        append("\n\nCREDITI DI ADRIAN: $credits")
+        append("\nINVENTARIO DI ADRIAN:\n")
+        if (inventory.isEmpty()) append("- vuoto\n") else inventory.forEach { append("- ${it.promptLine()}\n") }
+        append("Adrian può usare solo oggetti che possiede e con cariche disponibili.")
         append("\n\nLUOGO ATTUALE DI ADRIAN: $playerLocation")
         append("\n\nPERSONAGGI PRINCIPALI E DOVE SI TROVANO:\n")
         npcs.filter { !it.isNarrator }.forEach { append("- ${it.name}, ${it.role}: ${it.location}\n") }
@@ -297,6 +372,145 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 "Rispondi in italiano, al massimo ${n.maxSentences} frasi. Se il messaggio inizia con \"OOC:\", " +
                 "rispondi brevemente fuori dal gioco."
         )
+        append("\n\n").append(EFFECTS_RULES)
+    }
+
+    // ---------- Catalogo, acquisti, effetti, uso degli oggetti ----------
+
+    private fun catalogInstructions(): String = buildString {
+        append("\n\nCREDITI DI ADRIAN: $credits")
+        if (catalogStale || catalog.isEmpty()) {
+            append(
+                "\nNUOVO CATALOGO: il tuo assortimento si è appena rinnovato. Annuncialo in una frase (i dettagli li mostra il terminale) " +
+                    "e IN FONDO alla risposta aggiungi esattamente 5 oggetti nuovi, calibrati sui crediti di Adrian: " +
+                    "3 che può permettersi, 1 un po' sopra le sue possibilità, 1 raro o illegale e costoso. " +
+                    "Materiale informatico, hacking, impianti, armi leggere e gadget cyberpunk del 2436. Formato:\n" +
+                    "<catalogo>[{\"nome\":\"...\",\"tipo\":\"arma|tool|consumabile|altro\",\"descrizione\":\"max 20 parole\"," +
+                    "\"prezzo\":150,\"cariche\":3}, ...]</catalogo>\n(cariche -1 = illimitato; prezzo intero in crediti)"
+            )
+        } else {
+            append("\nCATALOGO ATTUALE (vendi solo questi, il catalogo non cambia finché Adrian non torna nel locale):\n")
+            catalog.forEach { append("- ${it.promptLine(withPrice = true)}\n") }
+            append("Per i tuoi acquisti non usare i tag di effetto: le vendite passano dal pulsante COMPRA.")
+        }
+    }
+
+    private fun markCatalogStale() {
+        catalogStale = true
+        prefs.edit().putBoolean("catalogStale", true).apply()
+    }
+
+    private fun saveInventoryState() {
+        prefs.edit()
+            .putInt("credits", credits)
+            .putString("inventory", itemsToJson(inventory))
+            .putString("catalog", itemsToJson(catalog))
+            .putBoolean("catalogStale", catalogStale)
+            .apply()
+    }
+
+    private fun findItem(name: String): Item? {
+        val n = name.trim().lowercase()
+        return inventory.firstOrNull { it.name.lowercase() == n }
+            ?: inventory.firstOrNull { it.name.lowercase().contains(n) || n.contains(it.name.lowercase()) }
+    }
+
+    /** Applica crediti, oggetti e catalogo dalla risposta; restituisce un riepilogo per la memoria. */
+    private fun applyEffects(who: Npc, fx: Effects): String {
+        if (fx.isEmpty) return ""
+        val log = mutableListOf<String>()
+        if (fx.catalog != null && who.id == DISTRIBUTOR_ID) {
+            catalog = fx.catalog
+            catalogStale = false
+            addFeed(FeedMsg("system", "", "", "🖥️ Nuovo catalogo di ${who.name}: ${fx.catalog.size} oggetti in vendita.", playerLocation))
+        }
+        if (fx.credits != 0) {
+            val before = credits
+            credits = (credits + fx.credits).coerceAtLeast(0)
+            val delta = credits - before
+            if (delta != 0) {
+                val sign = if (delta > 0) "+" else ""
+                log += "$sign$delta crediti"
+                addFeed(FeedMsg("system", "", "", "💳 $sign$delta ¢ (${who.name}) · saldo $credits ¢", playerLocation))
+            }
+        }
+        fx.lost.forEach { name ->
+            val found = findItem(name)
+            if (found != null) {
+                inventory = inventory - found
+                log += "perso ${found.name}"
+                addFeed(FeedMsg("system", "", "", "🎒 Perso: ${found.name} (${who.name})", playerLocation))
+            }
+        }
+        fx.gained.forEach { item ->
+            inventory = inventory + item
+            log += "ottenuto ${item.name}"
+            addFeed(FeedMsg("system", "", "", "🎒 Ottenuto: ${item.emoji} ${item.name} (${who.name})", playerLocation))
+        }
+        saveInventoryState()
+        return log.joinToString("; ")
+    }
+
+    /** Acquisto dal catalogo di NODO-7: lo gestisce il gioco, senza chiamate al modello. */
+    fun buy(item: Item) {
+        if (busy) return
+        val nodo = npc(DISTRIBUTOR_ID)
+        if (!isPresent(nodo)) return
+        if (credits < item.price) {
+            addFeed(FeedMsg("system", "", "", "💳 Crediti insufficienti per ${item.name}: servono ${item.price} ¢, ne hai $credits.", playerLocation))
+            return
+        }
+        credits -= item.price
+        inventory = inventory + item.copy(id = java.util.UUID.randomUUID().toString().take(8))
+        catalog = catalog.filter { it.id != item.id }
+        saveInventoryState()
+        addFeed(FeedMsg("player", PLAYER_ID, DISTRIBUTOR_ID, "*Adrian conferma l'acquisto di ${item.name} sul terminale.*", playerLocation))
+        addFeed(
+            FeedMsg(
+                "npc", DISTRIBUTOR_ID, PLAYER_ID,
+                "TRANSAZIONE COMPLETATA. ${item.name.uppercase()} EROGATO. -${item.price} CREDITI. SALDO: $credits. GRAZIE-GRAZIE PER L'ACQUISTO.",
+                playerLocation
+            )
+        )
+        addFeed(FeedMsg("system", "", "", "🎒 Ottenuto: ${item.emoji} ${item.name} · 💳 -${item.price} ¢ · saldo $credits ¢", playerLocation))
+        val saved = memories.getValue(DISTRIBUTOR_ID).add(
+            Layer.EPISODIC, "vendita", "[$playerLocation] Ho venduto ${item.name} ad Adrian per ${item.price} crediti.",
+            source = DISTRIBUTOR_ID, ttlDays = params.memoryTtlDays
+        )
+        memoryVersion++
+        viewModelScope.launch { embedEntry(memories.getValue(DISTRIBUTOR_ID), saved) }
+    }
+
+    /** Usa un oggetto: scala una carica e manda l'azione al narratore, che ne decide l'esito. */
+    fun useItem(item: Item, targetId: String, detail: String) {
+        if (busy || !item.usable) return
+        val current = inventory.firstOrNull { it.id == item.id } ?: return
+        val left = if (current.charges > 0) current.charges - 1 else current.charges
+        inventory = when {
+            current.type == "consumabile" && left == 0 -> inventory.filter { it.id != current.id }
+            else -> inventory.map { if (it.id == current.id) it.copy(charges = left) else it }
+        }
+        saveInventoryState()
+        val on = if (targetId == NARRATOR_ID) "" else " su ${npc(targetId).name}"
+        val extra = detail.trim().let { if (it.isEmpty()) "" else ": $it" }
+        val chargesNote = when {
+            current.charges < 0 -> ""
+            left == 0 && current.type == "consumabile" -> " (ultimo uso, esaurito)"
+            left == 0 -> " (cariche esaurite)"
+            else -> " (restano $left cariche)"
+        }
+        val t = "*Adrian usa ${current.name}$on$extra*"
+        addFeed(FeedMsg("player", PLAYER_ID, NARRATOR_ID, t, playerLocation))
+        addFeed(FeedMsg("system", "", "", "🎒 Usato: ${current.emoji} ${current.name}$chargesNote", playerLocation))
+        selectTarget(NARRATOR_ID)
+        viewModelScope.launch { runTurn(npc(NARRATOR_ID), "$t$chargesNote") }
+    }
+
+    fun dropItem(item: Item) {
+        if (busy) return
+        inventory = inventory.filter { it.id != item.id }
+        saveInventoryState()
+        addFeed(FeedMsg("system", "", "", "🎒 Hai lasciato: ${item.name}", playerLocation))
     }
 
     // ---------- Cronologie (ogni personaggio vede solo ciò che lo riguarda) ----------
@@ -418,6 +632,12 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putString("location", LOC_MEGACITY).apply()
         selectTarget(NARRATOR_ID)
         stats = Stats()
+        credits = START_CREDITS
+        inventory = START_INVENTORY
+        catalog = emptyList()
+        catalogStale = true
+        saveInventoryState()
+        gameEpoch++
         energyBase = 0
         applyInvisible(false)
         addIntro()
