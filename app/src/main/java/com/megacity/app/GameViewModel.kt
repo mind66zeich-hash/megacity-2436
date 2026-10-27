@@ -67,6 +67,16 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     /** I 5 oggetti in vendita ora da NODO-7. */
     var catalog by mutableStateOf(itemsFromJson(prefs.getString("catalog", null)))
         private set
+    /** Le 3 missioni offerte ora da Mr Nice. */
+    var board by mutableStateOf(missionsFromJson(prefs.getString("board", null)))
+        private set
+    /** Vero dopo l'arrivo al Laboratorio Helix: Mr Nice proporrà nuove missioni alla prossima interazione. */
+    var boardStale by mutableStateOf(prefs.getBoolean("boardStale", true))
+        private set
+    /** La missione accettata (al massimo una): attiva, oppure completata e da riscuotere. */
+    var mission by mutableStateOf(missionFromJson(prefs.getString("mission", null)))
+        private set
+
     /** Vero dopo l'arrivo al Locale Megacity: NODO-7 genererà un nuovo catalogo alla prossima interazione. */
     var catalogStale by mutableStateOf(prefs.getBoolean("catalogStale", true))
         private set
@@ -223,6 +233,10 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         playerLocation = location
         prefs.edit().putString("location", location).apply()
         if (location == npc(DISTRIBUTOR_ID).location) markCatalogStale()
+        if (location == npc(MRNICE_ID).location) {
+            boardStale = true
+            saveInventoryState()
+        }
         if (!isPresent(npc(target))) selectTarget(NARRATOR_ID)
         val t = "*Adrian si dirige verso: $location*"
         addFeed(FeedMsg("player", PLAYER_ID, NARRATOR_ID, t, location))
@@ -353,6 +367,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         append("\nCIÒ CHE ADRIAN PORTA CON SÉ (lo conosci solo se è visibile o se te lo mostra): ")
         append(if (inventory.isEmpty()) "niente." else inventory.joinToString("; ") { it.name })
         if (n.id == DISTRIBUTOR_ID) append(catalogInstructions())
+        if (n.id == MRNICE_ID) append(boardInstructions())
+        else missionNote(forNarrator = false)?.let { append(it) }
         append("\n\nLUOGO ATTUALE: ${n.location}")
         lastSceneHere()?.let { append("\nULTIMA DESCRIZIONE DELLA SCENA: $it") }
         append(recalledBlock("RICORDI DI ${n.name.uppercase()} (solo tuoi: gli altri personaggi non li conoscono)", recalled))
@@ -385,6 +401,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         append("\nINVENTARIO DI ADRIAN:\n")
         if (inventory.isEmpty()) append("- vuoto\n") else inventory.forEach { append("- ${it.promptLine()}\n") }
         append("Adrian può usare solo oggetti che possiede e con cariche disponibili.")
+        missionNote(forNarrator = true)?.let { append(it) }
         append("\n\nLUOGO ATTUALE DI ADRIAN: $playerLocation")
         append("\n\nPERSONAGGI PRINCIPALI E DOVE SI TROVANO:\n")
         npcs.filter { !it.isNarrator }.forEach { append("- ${it.name}, ${it.role}: ${it.location}\n") }
@@ -419,6 +436,56 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private fun boardInstructions(): String = buildString {
+        val m = mission
+        append("\n\nCREDITI DI ADRIAN: $credits")
+        when {
+            m != null && m.status == MISSION_DONE -> append(
+                "\nMISSIONE DI ADRIAN: \"${m.title}\" risulta COMPLETATA. La ricompensa di ${m.reward} crediti " +
+                    "si incassa con il pulsante RISCUOTI: se Adrian chiede di essere pagato, invitalo a confermare lì. " +
+                    "Non usare il tag <crediti> per pagarlo."
+            )
+            m != null -> append(
+                "\nMISSIONE IN CORSO DI ADRIAN (affidata da te): ${m.promptLine()} " +
+                    "Finché non la conclude o non la abbandona non può accettarne altre. Non pagarlo prima del completamento."
+            )
+        }
+        if (boardStale || board.isEmpty()) {
+            append(
+                "\nNUOVI LAVORI: hai appena ricevuto nuovi incarichi. Accennali in una frase (i dettagli li mostra la bacheca) " +
+                    "e IN FONDO alla risposta aggiungi esattamente 3 missioni: una facile (200-400 crediti), " +
+                    "una media (500-900), una difficile (1000-2000). Obiettivi concreti e verificabili nel gioco " +
+                    "(recuperare o consegnare un oggetto, hackerare un sistema, scoprire un'informazione, seguire qualcuno), " +
+                    "ambientati nel Settore 4: ${locations.joinToString("; ")} o luoghi nuovi vicini. " +
+                    "Possono coinvolgere Varga, Vanessa o NODO-7, senza contraddire ciò che sai di loro. Formato:\n" +
+                    "<missioni>[{\"titolo\":\"...\",\"obiettivo\":\"max 30 parole\",\"luogo\":\"...\"," +
+                    "\"difficolta\":\"facile|media|difficile\",\"ricompensa\":300}, ...]</missioni>"
+            )
+        } else {
+            append("\nLAVORI IN BACHECA (offri solo questi finché Adrian non torna nel laboratorio):\n")
+            board.forEach { append("- ${it.promptLine()}\n") }
+            append("Le missioni si accettano con il pulsante ACCETTA della bacheca.")
+        }
+    }
+
+    /** Missione attiva vista da narratore e personaggi (Mr Nice ha istruzioni sue). */
+    private fun missionNote(forNarrator: Boolean): String? {
+        val m = mission ?: return null
+        if (m.status == MISSION_DONE) {
+            return if (forNarrator) "\nMISSIONE DI ADRIAN: \"${m.title}\" completata; deve tornare da Mr Nice a riscuotere." else null
+        }
+        return if (forNarrator) {
+            "\n\nMISSIONE ATTIVA DI ADRIAN (affidata da Mr Nice): ${m.promptLine()}\n" +
+                "Quando l'obiettivo è davvero raggiunto aggiungi IN FONDO alla risposta <missione>completata</missione>; " +
+                "se diventa impossibile <missione>fallita</missione>. Non segnarla completata per tentativi a metà. " +
+                "La ricompensa la paga Mr Nice, non tu: non usare <crediti> per la missione."
+        } else {
+            "\n\n(Informazione di gioco: non citarla se il tuo personaggio non può saperla) Adrian ha questa missione: " +
+                "${m.promptLine()} Se l'obiettivo si compie davvero nel dialogo con te, aggiungi IN FONDO alla risposta " +
+                "<missione>completata</missione>."
+        }
+    }
+
     private fun markCatalogStale() {
         catalogStale = true
         prefs.edit().putBoolean("catalogStale", true).apply()
@@ -430,6 +497,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             .putString("inventory", itemsToJson(inventory))
             .putString("catalog", itemsToJson(catalog))
             .putBoolean("catalogStale", catalogStale)
+            .putString("board", missionsToJson(board))
+            .putBoolean("boardStale", boardStale)
+            .putString("mission", mission?.toJson()?.toString())
             .apply()
     }
 
@@ -447,6 +517,31 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             catalog = fx.catalog
             catalogStale = false
             addFeed(FeedMsg("system", "", "", "🖥️ Nuovo catalogo di ${who.name}: ${fx.catalog.size} oggetti in vendita.", playerLocation))
+        }
+        if (fx.board != null && who.id == MRNICE_ID) {
+            board = fx.board
+            boardStale = false
+            addFeed(FeedMsg("system", "", "", "📋 Nuovi lavori di ${who.name}: ${fx.board.size} missioni in bacheca.", playerLocation))
+        }
+        val m = mission
+        if (fx.missionOutcome != null && m != null && m.status == MISSION_ACTIVE) {
+            if (fx.missionOutcome == MISSION_DONE) {
+                mission = m.copy(status = MISSION_DONE)
+                log += "missione \"${m.title}\" completata"
+                addFeed(
+                    FeedMsg(
+                        "system", "", "",
+                        "✅ Obiettivo raggiunto: \"${m.title}\". Torna da ${npc(MRNICE_ID).name} " +
+                            "(${npc(MRNICE_ID).location}) a riscuotere ${m.reward} ¢.",
+                        playerLocation
+                    )
+                )
+            } else {
+                mission = null
+                log += "missione \"${m.title}\" fallita"
+                addFeed(FeedMsg("system", "", "", "❌ Missione fallita: \"${m.title}\". Nessuna ricompensa.", playerLocation))
+                rememberForMrNice("Adrian ha fallito la missione \"${m.title}\".")
+            }
         }
         if (fx.credits != 0) {
             val before = credits
@@ -473,6 +568,68 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         }
         saveInventoryState()
         return log.joinToString("; ")
+    }
+
+    private fun rememberForMrNice(text: String) {
+        val store = memories.getValue(MRNICE_ID)
+        val saved = store.add(Layer.EPISODIC, "missione", "[${npc(MRNICE_ID).location}] $text", source = MRNICE_ID, ttlDays = params.memoryTtlDays)
+        memoryVersion++
+        viewModelScope.launch { embedEntry(store, saved) }
+    }
+
+    /** Accetta una missione della bacheca (una sola alla volta). */
+    fun acceptMission(m: Mission) {
+        if (busy || mission != null) return
+        val nice = npc(MRNICE_ID)
+        if (!isPresent(nice)) return
+        speaker.stop()
+        mission = m.copy(status = MISSION_ACTIVE)
+        board = board.filter { it.id != m.id }
+        saveInventoryState()
+        addFeed(FeedMsg("player", PLAYER_ID, MRNICE_ID, "*Adrian accetta il lavoro: \"${m.title}\".*", playerLocation))
+        addFeed(
+            FeedMsg(
+                "npc", MRNICE_ID, PLAYER_ID,
+                "*sorride senza mostrare gli occhi* Affare fatto, amico. ${m.objective} Luogo: ${m.location}. " +
+                    "Torna da me a lavoro finito e avrai i tuoi ${m.reward} crediti.",
+                playerLocation
+            )
+        )
+        addFeed(FeedMsg("system", "", "", "📋 Missione accettata: ${m.difficultyEmoji} ${m.title} · ricompensa ${m.reward} ¢", playerLocation))
+        rememberForMrNice("Ho affidato ad Adrian la missione ${m.promptLine()}")
+    }
+
+    /** Riscuote la ricompensa di una missione completata: solo da Mr Nice. */
+    fun collectReward() {
+        val m = mission ?: return
+        if (busy || m.status != MISSION_DONE) return
+        val nice = npc(MRNICE_ID)
+        if (!isPresent(nice)) return
+        speaker.stop()
+        credits += m.reward
+        mission = null
+        saveInventoryState()
+        addFeed(FeedMsg("player", PLAYER_ID, MRNICE_ID, "*Adrian si presenta da ${nice.name} per riscuotere.*", playerLocation))
+        addFeed(
+            FeedMsg(
+                "npc", MRNICE_ID, PLAYER_ID,
+                "*fa scivolare un chip di credito sul tavolo* Lavoro pulito, amico. ${m.reward} crediti, come d'accordo. " +
+                    "Quando vuoi altro, sai dove trovarmi.",
+                playerLocation
+            )
+        )
+        addFeed(FeedMsg("system", "", "", "💳 +${m.reward} ¢ (missione \"${m.title}\") · saldo $credits ¢", playerLocation))
+        rememberForMrNice("Ho pagato ${m.reward} crediti ad Adrian per la missione \"${m.title}\", completata.")
+    }
+
+    /** Abbandona la missione attiva (nessuna ricompensa). */
+    fun abandonMission() {
+        val m = mission ?: return
+        if (busy) return
+        mission = null
+        saveInventoryState()
+        addFeed(FeedMsg("system", "", "", "📋 Missione abbandonata: \"${m.title}\".", playerLocation))
+        rememberForMrNice("Adrian ha abbandonato la missione \"${m.title}\" senza portarla a termine.")
     }
 
     /** Acquisto dal catalogo di NODO-7: lo gestisce il gioco, senza chiamate al modello. */
@@ -663,6 +820,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         inventory = START_INVENTORY
         catalog = emptyList()
         catalogStale = true
+        board = emptyList()
+        boardStale = true
+        mission = null
         saveInventoryState()
         gameEpoch++
         energyBase = 0

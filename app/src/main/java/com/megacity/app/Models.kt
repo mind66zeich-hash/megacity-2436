@@ -155,6 +155,27 @@ val DEFAULT_NPCS: List<Npc> = listOf(
                 "Segreto: possiedi ancora la sua licenza di proprietà e non l'hai mai annullata."
     ),
     Npc(
+        id = MRNICE_ID,
+        name = "Mr Nice",
+        role = "Intermediario di lavori nel Laboratorio Helix",
+        emoji = "😎",
+        location = LOC_HELIX,
+        temperature = 0.8f,
+        maxSentences = 5,
+        color = 0xFFFF6E40,
+        voicePitch = 0.9f,
+        voiceRate = 1.0f,
+        persona =
+            "Sei Mr Nice, intermediario di lavori sporchi che affitta un angolo del Laboratorio Helix da Nysera. " +
+                "Ex soldato corporativo, metà del volto ricostruita in titanio satinato, occhiali a specchio sempre addosso, " +
+                "giacca di pelle sintetica bordeaux e un sorriso che non arriva mai agli occhi. " +
+                "Carattere: cordiale, ironico, sempre calmo; chiami tutti \"amico\" e ti piace l'ordine. " +
+                "Paghi puntuale chi porta a termine il lavoro e non perdoni chi ti fa perdere tempo o faccia. " +
+                "Non fai domande sui metodi: ti interessano solo i risultati. Parli come un uomo d'affari gentile ma pericoloso. " +
+                "Rapporto con Nysera: le paghi l'affitto e la rispetti; lei ripara i tuoi uomini. " +
+                "Su Varga sei prudente: è un cliente occasionale e un concorrente."
+    ),
+    Npc(
         id = "vanessa",
         name = "Vanessa",
         role = "Ospite fissa e informatrice del Locale Megacity",

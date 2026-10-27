@@ -179,6 +179,9 @@ fun GameScreen(vm: GameViewModel, modifier: Modifier = Modifier) {
         if (vm.target == DISTRIBUTOR_ID && vm.isPresent(vm.npc(DISTRIBUTOR_ID))) {
             CatalogStrip(vm)
         }
+        if (vm.target == MRNICE_ID && vm.isPresent(vm.npc(MRNICE_ID))) {
+            MissionStrip(vm)
+        }
 
         // Scelta dell'interlocutore
         Row(
@@ -251,6 +254,65 @@ fun GameScreen(vm: GameViewModel, modifier: Modifier = Modifier) {
                 onClick = { vm.send(input); input = "" },
                 enabled = input.isNotBlank() && !vm.busy
             ) { Text(if (vm.busy) "…" else "Invia") }
+        }
+    }
+}
+
+/** Bacheca di Mr Nice: missioni da accettare o ricompensa da riscuotere. */
+@Composable
+private fun MissionStrip(vm: GameViewModel) {
+    val nice = vm.npc(MRNICE_ID)
+    val m = vm.mission
+    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
+        if (m != null && m.status == MISSION_DONE) {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("✅ ${m.title}", fontWeight = FontWeight.Bold)
+                    Button(onClick = { vm.collectReward() }, enabled = !vm.busy, modifier = Modifier.fillMaxWidth()) {
+                        Text("Riscuoti · +${m.reward} ¢")
+                    }
+                }
+            }
+            return@Column
+        }
+        if (m != null) {
+            Text(
+                "📋 Missione in corso: ${m.title}. ${nice.name} non ti affida altri lavori finché non la concludi.",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (vm.boardStale || vm.board.isEmpty()) {
+            Text(
+                "📋 Bacheca in aggiornamento: scrivi a ${nice.name} per vedere i nuovi lavori.",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            return@Column
+        }
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            vm.board.forEach { mi ->
+                Card(Modifier.width(240.dp)) {
+                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("${mi.difficultyEmoji} ${mi.title}", fontWeight = FontWeight.Bold, maxLines = 2)
+                        Text(
+                            "${mi.difficulty} · 📍 ${mi.location}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2
+                        )
+                        Text(mi.objective, style = MaterialTheme.typography.bodySmall, maxLines = 4)
+                        Button(
+                            onClick = { vm.acceptMission(mi) },
+                            enabled = !vm.busy && m == null,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Accetta · ${mi.reward} ¢") }
+                    }
+                }
+            }
         }
     }
 }
@@ -1004,6 +1066,7 @@ fun InventoryScreen(vm: GameViewModel, onUsed: () -> Unit, modifier: Modifier = 
                 }
             }
         }
+        item { MissionCard(vm) }
         item {
             Text(
                 "Gli oggetti si comprano da ${vm.npc(DISTRIBUTOR_ID).name} o si ottengono nel gioco. " +
@@ -1082,6 +1145,58 @@ fun InventoryScreen(vm: GameViewModel, onUsed: () -> Unit, modifier: Modifier = 
             text = { Text("L'oggetto verrà tolto dall'inventario.") },
             confirmButton = { TextButton(onClick = { vm.dropItem(item); dropping = null }) { Text("Lascia") } },
             dismissButton = { TextButton(onClick = { dropping = null }) { Text("Annulla") } }
+        )
+    }
+}
+
+/** Missione attuale nella scheda Inventario. */
+@Composable
+private fun MissionCard(vm: GameViewModel) {
+    val m = vm.mission
+    val nice = vm.npc(MRNICE_ID)
+    var confirmAbandon by remember { mutableStateOf(false) }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("📋 Missione", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (m == null) {
+                Text(
+                    "Nessuna missione in corso. ${nice.name} (${nice.location}) offre lavori pagati.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                return@Column
+            }
+            Text("${m.difficultyEmoji} ${m.title}", fontWeight = FontWeight.Bold)
+            Text(m.objective, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "📍 ${m.location} · ${m.difficulty} · ricompensa ${m.reward} ¢",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (m.status == MISSION_DONE) {
+                Text(
+                    "✅ Obiettivo raggiunto: torna da ${nice.name} (${nice.location}) e premi Riscuoti.",
+                    color = Color(0xFF00E676),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold
+                )
+            } else {
+                Text(
+                    "In corso: quando l'obiettivo è raggiunto, il narratore lo segnala.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(onClick = { confirmAbandon = true }, enabled = !vm.busy) { Text("Abbandona missione") }
+            }
+        }
+    }
+    if (confirmAbandon) {
+        AlertDialog(
+            onDismissRequest = { confirmAbandon = false },
+            title = { Text("Abbandonare la missione?") },
+            text = { Text("Non riceverai la ricompensa e ${nice.name} se ne ricorderà.") },
+            confirmButton = { TextButton(onClick = { vm.abandonMission(); confirmAbandon = false }) { Text("Abbandona") } },
+            dismissButton = { TextButton(onClick = { confirmAbandon = false }) { Text("Annulla") } }
         )
     }
 }

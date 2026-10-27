@@ -21,6 +21,7 @@ o in **Parametri**. La chiave resta sul telefono.
 |---|---|---|
 | 📖 Narratore | ovunque | Descrive scene ed esiti delle azioni, fa da master: per ora decide l'AI le regole |
 | 🤖 Nysera | Laboratorio Helix – Livello 112 | Androide sintetico ultra avanzato; ex relazione con Varga |
+| 😎 Mr Nice | Laboratorio Helix – Livello 112 | Intermediario: offre missioni pagate |
 | 🕴️ Varga | Locale Megacity – Settore 4 | Direttore del locale; ex relazione con Nysera |
 | 💋 Vanessa | Locale Megacity – Settore 4 | Maliziosa e loquace, informatrice di Varga (e non solo) |
 | 🖥️ NODO-7 | Locale Megacity – Settore 4 | Distributore di materiale informatico, catalogo dinamico |
@@ -41,6 +42,10 @@ all'ambientazione comune e alla scheda di Adrian.
   Nella scheda **Inventario** ogni oggetto ha **Usa** (scala una carica e manda l'azione al narratore) e **Lascia**.
 - **NODO-7** rinnova il catalogo ogni volta che arrivi al Locale Megacity: 5 oggetti calibrati sui tuoi crediti
   (3 alla tua portata, 1 un po' sopra, 1 raro o illegale). Quando parli con lui compaiono le schede con **Compra**.
+- **📋 Missioni di Mr Nice:** arrivando al Laboratorio Helix, Mr Nice prepara 3 lavori (facile, media, difficile)
+  con ricompensa in crediti; quando parli con lui compaiono le schede con **Accetta**. Una missione alla volta.
+  Quando l'obiettivo è raggiunto il narratore (o il personaggio coinvolto) la segna completata; poi torni da
+  Mr Nice e premi **Riscuoti**. La missione in corso si vede nella scheda Inventario, dove si può abbandonare.
 - **🎤 Microfono:** il tasto accanto al campo di testo avvia la dettatura in italiano (riconoscimento vocale di Android).
   Il testo finisce nel campo; in Parametri puoi farlo inviare subito ("Invia subito dopo la dettatura").
 - **🔊 Lettura ad alta voce:** narratore e personaggi vengono letti appena rispondono (sintesi vocale di Android,

@@ -90,9 +90,15 @@ data class Effects(
     val credits: Int = 0,
     val gained: List<Item> = emptyList(),
     val lost: List<String> = emptyList(),
-    val catalog: List<Item>? = null
+    val catalog: List<Item>? = null,
+    /** Bacheca di missioni generata da Mr Nice. */
+    val board: List<Mission>? = null,
+    /** Esito della missione attiva: "completata" o "fallita". */
+    val missionOutcome: String? = null
 ) {
-    val isEmpty get() = credits == 0 && gained.isEmpty() && lost.isEmpty() && catalog == null
+    val isEmpty
+        get() = credits == 0 && gained.isEmpty() && lost.isEmpty() && catalog == null &&
+            board == null && missionOutcome == null
 }
 
 private val OPT = setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
@@ -100,8 +106,10 @@ private val TAG_CREDITS = Regex("<crediti>\\s*([+-]?\\s*[\\d.]+)\\s*</crediti>",
 private val TAG_GAIN = Regex("<ottieni>(.*?)</ottieni>", OPT)
 private val TAG_LOSE = Regex("<perdi>(.*?)</perdi>", OPT)
 private val TAG_CATALOG = Regex("<catalogo>(.*?)</catalogo>", OPT)
+private val TAG_BOARD = Regex("<missioni>(.*?)</missioni>", OPT)
+private val TAG_MISSION = Regex("<missione>\\s*(completata|fallita)\\s*</missione>", OPT)
 /** Tag aperto e mai chiuso (risposta troncata): si taglia da lì in poi. */
-private val TAG_DANGLING = Regex("<(crediti|ottieni|perdi|catalogo)>.*$", OPT)
+private val TAG_DANGLING = Regex("<(crediti|ottieni|perdi|catalogo|missioni|missione)>.*$", OPT)
 /** Blocchi ```json ... ``` che a volte il modello mette intorno ai tag. */
 private val CODE_FENCE = Regex("```(json)?", RegexOption.IGNORE_CASE)
 
@@ -134,12 +142,16 @@ fun parseEffects(raw: String): Pair<String, Effects> {
     val lost = TAG_LOSE.findAll(raw).map { it.groupValues[1].trim() }.filter { it.isNotEmpty() }.toList()
     val catalogJson: String? = TAG_CATALOG.find(raw)?.groupValues?.get(1)
     val catalog: List<Item>? = if (catalogJson == null) null else parseCatalog(catalogJson)
+    val boardJson: String? = TAG_BOARD.find(raw)?.groupValues?.get(1)
+    val board: List<Mission>? = if (boardJson == null) null else parseBoard(boardJson)
+    val outcome: String? = TAG_MISSION.find(raw)?.groupValues?.get(1)?.lowercase()
 
     val text = raw
         .replace(TAG_CREDITS, "").replace(TAG_GAIN, "").replace(TAG_LOSE, "").replace(TAG_CATALOG, "")
+        .replace(TAG_BOARD, "").replace(TAG_MISSION, "")
         .replace(TAG_DANGLING, "").replace(CODE_FENCE, "")
         .replace(Regex("\\n{3,}"), "\n\n").trim()
-    return text to Effects(credits, gained, lost, catalog)
+    return text to Effects(credits, gained, lost, catalog, board, outcome)
 }
 
 /** Istruzioni sui tag, comuni a tutti i personaggi e al narratore. */
