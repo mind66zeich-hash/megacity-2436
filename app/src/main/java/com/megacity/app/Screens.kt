@@ -232,26 +232,51 @@ private fun EnergyBar(vm: GameViewModel) {
                 color = color,
                 modifier = Modifier.padding(top = 2.dp)
             )
-            Button(
-                onClick = { vm.rest() },
-                enabled = !vm.busy,
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-            ) { Text("🛌 Riposa nella capsula (azzera la chat, energia piena, invisibile)") }
+        }
+        var confirmRest by remember { mutableStateOf(false) }
+        Row(
+            Modifier.fillMaxWidth().padding(top = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Sempre disponibile: per ricaricare l'energia o per ripartire con una chat pulita.
+            if (e <= 0f) {
+                Button(onClick = { confirmRest = true }, enabled = !vm.busy, modifier = Modifier.weight(1f)) {
+                    Text("🛌 Riposa nella capsula")
+                }
+            } else {
+                OutlinedButton(onClick = { confirmRest = true }, enabled = !vm.busy, modifier = Modifier.weight(1f)) {
+                    Text("🛌 Riposa")
+                }
+            }
+            if (vm.invisible) {
+                OutlinedButton(onClick = { vm.leaveCapsule() }, enabled = !vm.busy, modifier = Modifier.weight(1f)) {
+                    Text("Esci dalla capsula")
+                }
+            }
         }
         if (vm.invisible) {
-            Row(
-                Modifier.fillMaxWidth().padding(top = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    "👻 Incapsulato e invisibile",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color(0xFFB388FF),
-                    fontWeight = FontWeight.Bold
-                )
-                OutlinedButton(onClick = { vm.leaveCapsule() }, enabled = !vm.busy) { Text("Esci dalla capsula") }
-            }
+            Text(
+                "👻 Incapsulato e invisibile",
+                style = MaterialTheme.typography.labelLarge,
+                color = Color(0xFFB388FF),
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
+        if (confirmRest) {
+            AlertDialog(
+                onDismissRequest = { confirmRest = false },
+                title = { Text("Riposare nella capsula?") },
+                text = {
+                    Text(
+                        "La chat verrà azzerata e l'energia tornerà piena; Adrian diventerà invisibile. " +
+                            "Le memorie dei personaggi restano intatte."
+                    )
+                },
+                confirmButton = { TextButton(onClick = { vm.rest(); confirmRest = false }) { Text("Riposa") } },
+                dismissButton = { TextButton(onClick = { confirmRest = false }) { Text("Annulla") } }
+            )
         }
     }
 }

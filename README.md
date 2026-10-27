@@ -33,7 +33,7 @@ all'ambientazione comune e alla scheda di Adrian.
 - In basso scegli con chi parlare. Si può parlare solo con chi è nello stesso luogo.
 - Un messaggio fatto solo di un'azione tra asterischi (`*sfondo la porta*`) va sempre al narratore.
 - **⚡ Energia di Adrian:** scende con i token usati nella sessione (limite in Parametri, predefinito 100.000).
-  A zero compare **🛌 Riposa nella capsula**: come il vecchio "dormi" azzera la chat (le memorie restano), energia di nuovo piena, Adrian viene incapsulato e diventa invisibile
+  Il tasto **🛌 Riposa** (nella capsula) si può usare in qualsiasi momento, ed è evidenziato quando l'energia arriva a zero: come il vecchio "dormi" azzera la chat (le memorie restano), energia di nuovo piena, Adrian viene incapsulato e diventa invisibile
   ai personaggi (sentono solo la sua voce), ma puoi continuare a giocare. **Esci dalla capsula** lo rende di nuovo visibile.
 - `OOC: ...` parla fuori dal gioco con il personaggio selezionato (utile per correggerlo): lo scambio
   non entra nella sua memoria né nella cronologia.
