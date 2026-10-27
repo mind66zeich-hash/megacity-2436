@@ -94,7 +94,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun rest() {
         if (busy) return
         energyBase = stats.totalTokens
-        setInvisible(true)
+        applyInvisible(true)
         // Come il vecchio comando "dormi": la chat si azzera (e con lei la cronologia inviata ai personaggi),
         // i ricordi scaduti vengono rimossi, la memoria persistente di ogni personaggio resta intatta.
         feed.clear()
@@ -118,13 +118,13 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     /** Uscita dalla capsula: Adrian torna visibile. */
     fun leaveCapsule() {
         if (busy || !invisible) return
-        setInvisible(false)
+        applyInvisible(false)
         val t = "*La capsula si apre con un sibilo: Adrian ne esce ed è di nuovo visibile.*"
         addFeed(FeedMsg("player", PLAYER_ID, NARRATOR_ID, t, playerLocation))
         viewModelScope.launch { runTurn(npc(NARRATOR_ID), t) }
     }
 
-    private fun setInvisible(v: Boolean) {
+    private fun applyInvisible(v: Boolean) {
         invisible = v
         prefs.edit().putBoolean("invisible", v).apply()
     }
@@ -419,7 +419,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         selectTarget(NARRATOR_ID)
         stats = Stats()
         energyBase = 0
-        setInvisible(false)
+        applyInvisible(false)
         addIntro()
         memoryVersion++
     }
