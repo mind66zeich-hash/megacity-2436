@@ -229,6 +229,8 @@ data class Params(
     val maxOutputTokens: Int = 2048,
     /** Messaggi recenti inviati come cronologia a ogni chiamata. */
     val historyMessages: Int = 20,
+    /** Token massimi per sessione: è l'energia piena di Adrian. */
+    val sessionTokenBudget: Int = 100_000,
     // Memoria
     val memoryTtlDays: Int = 0,      // 0 = i ricordi non scadono
     val memoryTopK: Int = 5,
@@ -252,6 +254,7 @@ data class Params(
         put("failover", failover); put("showDiagnostics", showDiagnostics)
         put("topP", topP.toDouble()); put("topK", topK)
         put("maxOutputTokens", maxOutputTokens); put("historyMessages", historyMessages)
+        put("sessionTokenBudget", sessionTokenBudget)
         put("memoryTtlDays", memoryTtlDays); put("memoryTopK", memoryTopK)
         put("useEmbeddings", useEmbeddings); put("embeddingModel", embeddingModel)
         put("embeddingDim", embeddingDim); put("similarityThreshold", similarityThreshold.toDouble())
@@ -276,6 +279,7 @@ data class Params(
                     topK = o.optInt("topK", d.topK),
                     maxOutputTokens = o.optInt("maxOutputTokens", d.maxOutputTokens),
                     historyMessages = o.optInt("historyMessages", d.historyMessages),
+                    sessionTokenBudget = o.optInt("sessionTokenBudget", d.sessionTokenBudget),
                     memoryTtlDays = o.optInt("memoryTtlDays", d.memoryTtlDays),
                     memoryTopK = o.optInt("memoryTopK", d.memoryTopK),
                     useEmbeddings = o.optBoolean("useEmbeddings", d.useEmbeddings),

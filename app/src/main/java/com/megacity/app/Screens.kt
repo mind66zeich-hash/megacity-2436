@@ -27,6 +27,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -100,6 +101,8 @@ fun GameScreen(vm: GameViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
+
+        EnergyBar(vm)
 
         if (vm.params.activeKey.isBlank()) {
             var quickKey by remember { mutableStateOf("") }
@@ -188,6 +191,67 @@ fun GameScreen(vm: GameViewModel, modifier: Modifier = Modifier) {
                 onClick = { vm.send(input); input = "" },
                 enabled = input.isNotBlank() && !vm.busy
             ) { Text(if (vm.busy) "…" else "Invia") }
+        }
+    }
+}
+
+/** Barra dell'energia di Adrian: piena a inizio sessione, si svuota con i token consumati. */
+@Composable
+private fun EnergyBar(vm: GameViewModel) {
+    val e = vm.energy
+    val color = when {
+        e > 0.5f -> Color(0xFF00E676)
+        e > 0.2f -> Color(0xFFFFC400)
+        else -> Color(0xFFFF1744)
+    }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                "⚡ Energia di Adrian ${"%.0f".format(e * 100)}%",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
+            Text(
+                "%,d / %,d token".format(vm.tokensLeft, vm.params.sessionTokenBudget.toLong()),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        LinearProgressIndicator(
+            progress = { e },
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(8.dp),
+            color = color,
+            trackColor = color.copy(alpha = 0.18f),
+            strokeCap = StrokeCap.Round
+        )
+        if (e <= 0f) {
+            Text(
+                "Energia esaurita: Adrian ha bisogno di riposare. Puoi anche continuare a giocare così.",
+                style = MaterialTheme.typography.labelSmall,
+                color = color,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+            Button(
+                onClick = { vm.rest() },
+                enabled = !vm.busy,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+            ) { Text("🛌 Riposa nella capsula (azzera la chat, energia piena, invisibile)") }
+        }
+        if (vm.invisible) {
+            Row(
+                Modifier.fillMaxWidth().padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "👻 Incapsulato e invisibile",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color(0xFFB388FF),
+                    fontWeight = FontWeight.Bold
+                )
+                OutlinedButton(onClick = { vm.leaveCapsule() }, enabled = !vm.busy) { Text("Esci dalla capsula") }
+            }
         }
     }
 }
@@ -471,6 +535,18 @@ fun ParamsScreen(vm: GameViewModel, modifier: Modifier = Modifier) {
                     "scrivi qui il nuovo ID (elenco su ai.google.dev/gemini-api/docs/models).",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Section("⚡ Energia di Adrian") {
+            IntSliderRow(
+                "Token massimi per sessione", p.sessionTokenBudget, 10_000, 1_000_000, 10_000,
+                hint = "L'energia è piena all'apertura dell'app, a una nuova partita o dopo il riposo nella capsula, e scende con i token usati " +
+                    "(input + output di ogni risposta). Predefinito: 100.000."
+            ) { v -> vm.updateParams { it.copy(sessionTokenBudget = v) } }
+            Text(
+                "Usati in questa sessione: %,d token · rimasti: %,d".format(vm.sessionTokensUsed, vm.tokensLeft),
+                style = MaterialTheme.typography.bodySmall
             )
         }
 

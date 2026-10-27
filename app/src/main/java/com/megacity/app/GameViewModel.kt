@@ -70,6 +70,65 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     fun isPresent(n: Npc) = n.isNarrator || n.location == playerLocation
 
+    // ---------- Energia di Adrian ----------
+
+    /** Token totali registrati all'ultimo riposo: l'energia si conta da qui. */
+    private var energyBase by mutableStateOf(0L)
+
+    /** Adrian riposa incapsulato e invisibile (resta salvato anche chiudendo l'app). */
+    var invisible by mutableStateOf(prefs.getBoolean("invisible", false))
+        private set
+
+    /** Token usati dall'apertura dell'app, da una nuova partita o dall'ultimo riposo. */
+    val sessionTokensUsed: Long get() = (stats.totalTokens - energyBase).coerceAtLeast(0)
+
+    /** Token ancora disponibili nella sessione. */
+    val tokensLeft: Long get() = (params.sessionTokenBudget - sessionTokensUsed).coerceAtLeast(0)
+
+    /** Energia da 0 a 1: scende man mano che la sessione consuma token. */
+    val energy: Float
+        get() = if (params.sessionTokenBudget <= 0) 1f
+        else (tokensLeft.toFloat() / params.sessionTokenBudget).coerceIn(0f, 1f)
+
+    /** Riposo nella capsula: chat azzerata, energia piena, Adrian invisibile; il narratore descrive la scena. */
+    fun rest() {
+        if (busy) return
+        energyBase = stats.totalTokens
+        setInvisible(true)
+        // Come il vecchio comando "dormi": la chat si azzera (e con lei la cronologia inviata ai personaggi),
+        // i ricordi scaduti vengono rimossi, la memoria persistente di ogni personaggio resta intatta.
+        feed.clear()
+        val purged = memories.values.sumOf { it.purgeExpired() }
+        memories.values.forEach { it.log("sleep", "riposo nella capsula") }
+        memoryVersion++
+        addFeed(
+            FeedMsg(
+                "system", "", "",
+                "🌙 Riposo: chat azzerata" + (if (purged > 0) ", $purged ricordi scaduti rimossi" else "") +
+                    ". Le memorie dei personaggi restano intatte.",
+                playerLocation
+            )
+        )
+        val t = "*Esausto, Adrian si ritira a riposare: il suo corpo viene sigillato in una capsula di incapsulamento " +
+            "che lo rigenera e lo rende invisibile.*"
+        addFeed(FeedMsg("player", PLAYER_ID, NARRATOR_ID, t, playerLocation))
+        viewModelScope.launch { runTurn(npc(NARRATOR_ID), t) }
+    }
+
+    /** Uscita dalla capsula: Adrian torna visibile. */
+    fun leaveCapsule() {
+        if (busy || !invisible) return
+        setInvisible(false)
+        val t = "*La capsula si apre con un sibilo: Adrian ne esce ed è di nuovo visibile.*"
+        addFeed(FeedMsg("player", PLAYER_ID, NARRATOR_ID, t, playerLocation))
+        viewModelScope.launch { runTurn(npc(NARRATOR_ID), t) }
+    }
+
+    private fun setInvisible(v: Boolean) {
+        invisible = v
+        prefs.edit().putBoolean("invisible", v).apply()
+    }
+
     // ---------- Parametri e schede ----------
 
     fun updateParams(change: (Params) -> Params) {
@@ -194,6 +253,12 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         append("Sei questo personaggio dentro la storia, non un assistente.\n")
         append(n.persona)
         append("\n\nIL GIOCATORE, con cui stai parlando: ${p.playerSheet}")
+        if (invisible) {
+            append(
+                "\nSTATO DI ADRIAN: è incapsulato e invisibile. Non puoi vederlo né sapere dove si trova: " +
+                    "se parla senti solo una voce senza corpo. Reagisci come farebbe ${n.name} davanti a una voce invisibile."
+            )
+        }
         append("\n\nLUOGO ATTUALE: ${n.location}")
         lastSceneHere()?.let { append("\nULTIMA DESCRIZIONE DELLA SCENA: $it") }
         append(recalledBlock("RICORDI DI ${n.name.uppercase()} (solo tuoi: gli altri personaggi non li conoscono)", recalled))
@@ -215,6 +280,12 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         append("\n\nRUOLO: sei il Narratore e il master di gioco di \"Megacity 2436\", un gioco di ruolo testuale. ")
         append(n.persona)
         append("\n\nIL GIOCATORE: ${p.playerSheet}")
+        if (invisible) {
+            append(
+                "\nSTATO DI ADRIAN: riposa incapsulato in una capsula rigenerante che lo rende invisibile. " +
+                    "Nessuno può vederlo, ma lui può muoversi, osservare e parlare. Tienine conto nelle reazioni di comparse e personaggi."
+            )
+        }
         append("\n\nLUOGO ATTUALE DI ADRIAN: $playerLocation")
         append("\n\nPERSONAGGI PRINCIPALI E DOVE SI TROVANO:\n")
         npcs.filter { !it.isNarrator }.forEach { append("- ${it.name}, ${it.role}: ${it.location}\n") }
@@ -347,6 +418,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putString("location", LOC_MEGACITY).apply()
         selectTarget(NARRATOR_ID)
         stats = Stats()
+        energyBase = 0
+        setInvisible(false)
         addIntro()
         memoryVersion++
     }
